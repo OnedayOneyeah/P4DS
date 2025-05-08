@@ -1,6 +1,6 @@
 ## 필요 패키지 설치
 ```bash
-pip install openai tavily-python chromadb pandas sentence_transformers openpyxl streamlit python-dotenv
+pip install openai tavily-python chromadb pandas sentence_transformers openpyxl streamlit python-dotenv streamlit-clipboard
 ```
 
 ## API 키 설정
