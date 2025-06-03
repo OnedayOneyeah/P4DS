@@ -14,6 +14,5 @@ bash install.sh
 ## 애플리케이션 실행
 ```bash
 conda activate p4ds
-python db.py # db 생성 (한 번만 하면 됨)
 streamlit run app.py --server.fileWatcherType none
 ```
