@@ -25,7 +25,7 @@ default_values = {
     'current_stage': 'initial_form', 'startup_info': {},
     'report_card': json.loads(json.dumps(report_card)),
     'collected_contexts': [], 'action_history': [], 'iteration_count': 0,
-    'max_iterations': 5, # TODO 수정
+    'max_iterations': 1, # TODO 수정
     # --- AskUser related state ---
     'ask_user_pending': False,
     'pending_questions_list': [],     # List of questions
@@ -355,6 +355,13 @@ elif st.session_state.current_stage == 'report_ready' or st.session_state.curren
                     imgs.append((os.path.join(actual_image_folder_on_disk, filename), filename.split('.')[0]))
         for i in imgs:       
             st.image(i[0], caption=f"{i[1]}")
+
+        # # 이미지 출력 후 삭제
+        # for img_path, _ in imgs:
+        #     try:
+        #         os.remove(img_path)
+        #     except Exception as e:
+        #         st.warning(f"이미지 삭제 실패: {img_path} - {e}")
 
     with col_qa:
         st.subheader("💬 Report Q&A")

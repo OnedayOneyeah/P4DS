@@ -2,3 +2,4 @@ __pycache__/
 .env
 my_chromadb_folder/
 .codebox/
+UI/static/images/

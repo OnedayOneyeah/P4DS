@@ -21,19 +21,73 @@ settings.MODEL = "gpt-4.1-mini"
 # === 10개 항목별 초기 Score/Confidence (None) ===
 report_card = {
     "Clarity of Vision":       {"score": None, "confidence": None},
-    "Product-Market Fit":      {"score": None, "confidence": None},
-    "Competitive Advantage":   {"score": None, "confidence": None},
     "Team Competency":         {"score": None, "confidence": None},
-    "Go-to-Market Strategy":   {"score": None, "confidence": None},
     "Customer Understanding":  {"score": None, "confidence": None},
-    "Financial Readiness":     {"score": None, "confidence": None},
-    "Scalability Potential":   {"score": None, "confidence": None},
+    "Product-Market Fit":      {"score": None, "confidence": None},
     "Traction & KPIs":         {"score": None, "confidence": None},
-    "Fundraising Preparedness":{"score": None, "confidence": None},
+    "Go-to-Market Strategy":   {"score": None, "confidence": None},
+    "Financial Readiness":     {"score": None, "confidence": None}
+}
+num_criteria = len(report_card)
+
+# 평가지표별 정의 -> 이후 평가 시 각 평가지표와 정의 연결해서 사용
+criterion_definitions = {
+    "Clarity of Vision": (
+        "The clarity and coherence of the startup’s long-term goals and mission. It assesses whether the startup has a well-defined direction and purpose."
+    ),
+    "Team Competency": (
+        "The skills, experience, and execution capability of the founding and core team. This includes technical proficiency, role distribution, and adaptability."
+    ),
+    "Customer Understanding": (
+        "The degree to which the startup understands its target customers’ needs, pain points, and behaviors, and how that understanding shapes product or service design."
+    ),
+    "Product-Market Fit": (
+        "How well the product or service satisfies an existing market demand. Includes customer validation, engagement, and retention."
+    ),
+    "Traction & KPI": (
+        "The measurable indicators of progress such as user growth, revenue, engagement, or retention. Demonstrates early signs of market validation or momentum."
+    ),
+    "Go-to-Market Strategy": (
+        "The effectiveness and feasibility of the plan for customer acquisition, distribution, and messaging. Includes sales channels, marketing strategy, and outreach mechanisms."
+    ),
+    "Financial Readiness": (
+        "The current financial state and the ability to sustain or scale the business. Includes budgeting, burn rate awareness, and fundraising preparedness."
+    ),
 }
 
-CONFIDENCE_THRESHOLD = 90
- 
+CONFIDENCE_THRESHOLD = 80
+
+# 스타트업 stage에 따라 평가지표별 가중치 부여해 overall_score 계산하기 위한 가중치 정보 저장
+STAGE_WEIGHTS = {
+    "early": {
+        "Clarity of Vision": 0.25,
+        "Team Competency": 0.25,
+        "Customer Understanding": 0.20,
+        "Product-Market Fit": 0.15,
+        "Traction & KPIs": 0.05,
+        "Go-to-Market Strategy": 0.05,
+        "Financial Readiness": 0.05
+    },
+    "growth": {
+        "Clarity of Vision": 0.15,
+        "Team Competency": 0.15,
+        "Customer Understanding": 0.20,
+        "Product-Market Fit": 0.20,
+        "Traction & KPIs": 0.15,
+        "Go-to-Market Strategy": 0.10,
+        "Financial Readiness": 0.05
+    },
+    "scaling": {
+        "Clarity of Vision": 0.10,
+        "Team Competency": 0.15,
+        "Customer Understanding": 0.10,
+        "Product-Market Fit": 0.15,
+        "Traction & KPIs": 0.20,
+        "Go-to-Market Strategy": 0.20,
+        "Financial Readiness": 0.10
+    }
+}
+
 def all_criteria_above_threshold(report: dict, threshold: int) -> bool:
     """
     모든 항목의 confidence가 threshold 이상인지 체크.
@@ -72,6 +126,77 @@ def llm_call(system_prompt: str, user_prompt: str, temperature: float = 0.7) -> 
     )
     return completion.choices[0].message.content.strip()
 
+# 모든 user input 모아서 스타트업의 단계 LLM으로부터 가져오는 함수 (generate_business_report에서 사용)
+def infer_startup_stage_from_input(user_text: str) -> str:
+    system_prompt = (
+        "You are a startup evaluator AI.\n"
+        "Classify the startup's stage based ONLY on the description below.\n\n"
+        "Possible stages:\n"
+        "- [early]: Idea stage or pre-revenue\n"
+        "- [growth]: Has launched product, early user or revenue growth\n"
+        "- [scaling]: Proven product-market fit and scaling business\n\n"
+        "Return ONLY the stage name wrapped in brackets, e.g., [growth].\n"
+        "Do NOT add explanation, just return the label."
+    )
+    user_prompt = f"Startup description:\n{user_text}\n\nStartup Stage:"
+    raw_response = llm_call(system_prompt, user_prompt, temperature=0.0)
+
+    # 정규표현식 기반 파싱
+    match = re.search(r"\[(early|growth|scaling)\]", raw_response.lower())
+    if match:
+        return match.group(1)
+    return "unknown"
+
+# 스타트업 stage 고려해서 지표별 가중치 부여해 overall score 계산
+def compute_weighted_overall_score(report: dict, stage: str) -> float:
+    weights = STAGE_WEIGHTS.get(stage, {})
+    total = 0.0
+    for criterion, data in report.items():
+        score = data.get("score")
+        weight = weights.get(criterion, 0)
+        if score is not None:
+            total += score * weight
+    return round(total, 2)
+
+# 스타트업 stage 고려해서 부족한 부분에 대한 피드백 받는 부분
+def generate_stage_feedback_text(report: dict, stage: str) -> str:
+    """
+    현재 스타트업의 평가 점수와 단계(stage)를 바탕으로,
+    LLM이 부족한 항목과 그 이유를 요약 피드백으로 생성.
+
+    출력은 자연어 bullet-point 텍스트로 구성됨.
+    """
+
+    # 시스템 프롬프트: 역할과 목적 정의
+    system_prompt = (
+        "You are a startup evaluation assistant.\n"
+        "Given a startup's current stage and evaluation scores, "
+        "your job is to identify which criteria are relatively weak or risky at this stage.\n\n"
+        "Explain briefly and clearly why each low-scoring criterion matters at this stage.\n"
+        "Return your feedback in 2~5 bullet points in plain English (no JSON)."
+    )
+
+    # 평가지표 요약 텍스트 구성
+    def score_str(k, v):
+        return f"{k}: Score = {v['score']}/5, Confidence={v['confidence']}%"
+
+    report_summary = "\n".join([
+        score_str(k, v) for k, v in report.items()
+        if v["score"] is not None and v["confidence"] is not None
+    ])
+
+    # 사용자 프롬프트: 점수 + 단계 전달
+    user_prompt = (
+        f"Startup Stage: {stage}\n\n"
+        f"Evaluation Scores:\n{report_summary}\n\n"
+        "Based on this information, which areas should the startup improve given its current stage?"
+    )
+
+    # LLM 호출
+    feedback_text = llm_call(system_prompt, user_prompt, temperature=0.7)
+
+    return feedback_text.strip()
+
 def parse_report_card_json(json_str: str) -> dict:
     """
     LLM이 준 JSON을 파싱해, 10개 키가 모두 있는지, 각 value에 "score","confidence"가 있는지 검사.
@@ -85,7 +210,7 @@ def parse_report_card_json(json_str: str) -> dict:
         return None
 
     required_keys = list(report_card.keys())
-    if len(data.keys()) != 10:
+    if len(data.keys()) != num_criteria:
         return None
     for k in required_keys:
         if k not in data:
@@ -279,7 +404,6 @@ def generate_db_query(criterion: str, all_context: str, db_type: str) -> str:
     query = llm_call(system_prompt, user_prompt, temperature=0.3)
     return query.strip()
 
-# 수정 (정문)
 def generate_user_question_for_criterion(criterion: str, all_context: str) -> str:
     """
     LLM에게:
@@ -338,7 +462,6 @@ def generate_internet_search_query(criterion: str, all_context: str) -> str:
     suggested_query = llm_call(system_prompt, user_prompt, temperature=0.7)
     return suggested_query.strip()
 
-# 수정(정문)
 def perform_action(action: str, target_criteria: str, collected_contexts: list) -> str:
     """
     LLM이 결정한 action을 실제 수행하여 결과 텍스트를 반환.
@@ -397,7 +520,7 @@ def perform_action(action: str, target_criteria: str, collected_contexts: list) 
         return ("(No further actions required.)", None)
     else:
         return (f"(Unknown Action: {action})", None)
-
+ 
 def ask_llm_for_next_action(report: dict, collected_texts: list, action_history: list) -> dict:
     """
     LLM에게 “다음 액션” + “어느 항목(criterion)인지” + "왜 그 액션을 골랐는지(rationale)"를
@@ -460,12 +583,15 @@ def ask_llm_for_next_action(report: dict, collected_texts: list, action_history:
 
         try:
             action_data = json.loads(raw.strip())
+            print("=========")
+            print(action_data)
+            print("=========")
             # JSON 키 검사
             if ("criterion" in action_data) and ("action" in action_data) and ("rationale" in action_data):
                 valid_actions = ["AskUser", "SearchDB_startup", "SearchDB_report", "SearchInternet", "RefineOutput", "AnalyzeAndVisualize", "NoActionNeeded"]
                 if action_data["action"] in valid_actions:
                     # # TODO 하나씩 시도
-                    # action_data["action"]=="AnalyzeAndVisualize"
+                    # action_data["action"]="AnalyzeAndVisualize"
                     return action_data
         except Exception:
             pass
@@ -494,8 +620,6 @@ def generate_business_report(report: dict, collected_texts: list) -> str:
     analysis_texts_from_visualization = []
     general_contexts = []
 
-    visualization_action_performed = False
-
     for c in collected_texts:
         if c.startswith("USER_INPUT:"):
             user_inputs.append(c[len("USER_INPUT:"):].strip())
@@ -506,7 +630,6 @@ def generate_business_report(report: dict, collected_texts: list) -> str:
         elif c.startswith("REFINED_OUTPUT:"):
             refined_outputs.append(c[len("REFINED_OUTPUT:"):].strip())
         elif c.startswith("3C_ANALYSIS:"):
-            visualization_action_performed = True
             analysis_texts_from_visualization.append(c[len("3C_ANALYSIS_TEXT:"):].strip())
         else: general_contexts.append(c)
 
@@ -558,21 +681,21 @@ def generate_business_report(report: dict, collected_texts: list) -> str:
     if not user_only_input_text:
         user_only_input_text = "(No user input provided.)"
 
+    # 누적된 user input 기반으로 스타트업 단계 추측
+    startup_stage = infer_startup_stage_from_input(user_only_input_text)
+
+    # report_card에 저장된 각 평가지표를 돌며 지표별 정의를 criterion_definitions와 붙여주기
+    criteria_description_block = "\n".join([
+    f"{i+1}) \"{k}\": {criterion_definitions.get(k, '')}" for i, k in enumerate(report_card.keys())
+    ])
+    
+    # 원래 아래 프롬프트 내에 평가지표 이름 나열되어 있었는데 위 block으로 채우는 걸로 대체
     system_prompt_2 = (
         "You are an AI assistant that updates the score and confidence of EXACTLY these 10 criteria:\n"
-        "1) \"Clarity of Vision\"\n"
-        "2) \"Product-Market Fit\"\n"
-        "3) \"Competitive Advantage\"\n"
-        "4) \"Team Competency\"\n"
-        "5) \"Go-to-Market Strategy\"\n"
-        "6) \"Customer Understanding\"\n"
-        "7) \"Financial Readiness\"\n"
-        "8) \"Scalability Potential\"\n"
-        "9) \"Traction & KPIs\"\n"
-        "10) \"Fundraising Preparedness\"\n\n"
+        f"{criteria_description_block}\n\n"
         "IMPORTANT: For scoring and confidence, you must rely ONLY on the user's input below.\n"
         "Ignore any DB or internet data for the actual scoring.\n\n"
-        "You MUST ONLY output valid JSON with these EXACT 10 keys. No more, no less, no renaming.\n"
+        "You MUST ONLY output valid JSON with these EXACT 7 keys. No more, no less, no renaming.\n"
         "Each key => {\"score\": (1~5), \"confidence\": (0~100)}. No extra text."
     )
     user_prompt_2 = (
@@ -599,6 +722,9 @@ def generate_business_report(report: dict, collected_texts: list) -> str:
         update_report_card(report, new_report_data)
     else:
         print("❌ 3회 시도 후에도 JSON 파싱 실패. report_card 업데이트를 건너뜁니다.")
+    
+    # report score 업데이트 이후 overall score 계산
+    overall_score = compute_weighted_overall_score(report, startup_stage)
 
     # ------------------------------------------------------
     # (3) 최종 '마크다운' 형태의 보고서 생성
@@ -634,16 +760,6 @@ def generate_business_report(report: dict, collected_texts: list) -> str:
         for k, v in report.items()
     ])
 
-    user_prompt_3 = (
-        f"Updated report card (scores/confidences):\n{updated_report_summary}\n\n"
-        f"Main report text (use this as the primary source for detailed explanations):\n{refined_report_text}\n\n"
-        f"Additional Context (for background and specific details if needed):\n{structured_context}\n\n"
-        "Please produce a comprehensive markdown report with the structure above. "
-        "Ensure the 'Rationale & Insights' for each criterion is detailed and draws from all relevant information. "
-        "The 3C Analysis should also be thorough."
-    )
-    final_markdown_report = llm_call(system_prompt_3, user_prompt_3, temperature=0.7)
-
     references_md = "## References\n"
     if user_inputs:
         references_md += "\n**User Input**\n"
@@ -662,7 +778,7 @@ def generate_business_report(report: dict, collected_texts: list) -> str:
         for i, ro in enumerate(refined_outputs, 1):
             references_md += f"- Refined #{i}: {ro}\n"
     if analysis_texts_from_visualization:
-        references_md += "\n**3C Analysis Texts (from Visualization Step)**\n"
+        references_md += "\n**3C Analysis Texts**\n"
         for i, ao in enumerate(analysis_texts_from_visualization, 1): 
             references_md += f"- Analysis Text #{i}: {ao}...\n"
 
@@ -683,6 +799,29 @@ def generate_business_report(report: dict, collected_texts: list) -> str:
     )
 
     filtered_references = llm_call(system_prompt_4, user_prompt_4, temperature=0.7)
+
+    user_prompt_3 = (
+        f"Updated report card:\n{updated_report_summary}\n\n"
+        "Refined text:\n"
+        f"{refined_report_text}\n\n"
+        "Please produce a comprehensive markdown report with the structure above. "
+        "Make sure to include the 3C Analysis and the 7 criteria."
+    )
+
+    # LLM으로 최종 report 생성
+    final_markdown_report = llm_call(system_prompt_3, user_prompt_3, temperature=0.7)
+
+    # 스타트업 stage 기반 피드백 생성 및 report에 피드백 내용 추가
+    stage_feedback_text = generate_stage_feedback_text(report, startup_stage)
+
+    final_markdown_report += "\n\n## Overall Assessment\n"
+    final_markdown_report += f"**Startup Stage**: `{startup_stage}`\n"
+    final_markdown_report += f"**Weighted Overall Score**: `{overall_score}/5`\n"
+
+    if stage_feedback_text:
+        final_markdown_report += "\n**Stage-Based Feedback:**\n"
+        final_markdown_report += stage_feedback_text
+
     final_markdown_report += "\n\n## Relevant References\n"
     final_markdown_report += filtered_references
 
