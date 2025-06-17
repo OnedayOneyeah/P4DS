@@ -536,12 +536,13 @@ def ask_llm_for_next_action(report: dict, collected_texts: list, action_history:
         " 5) RefineOutput  : Have enough info, want to refine/improve writing\n"
         " 6) AnalyzeAndVisualize : Perform data analysis and generate visualizations using retrieved user and market information.\n"
         " 7) NoActionNeeded: Everything is sufficiently addressed\n\n"
-        "When deciding, consider any info gaps or low confidence in the 10 criteria.\n"
-        "Also, review the action history and **prioritize actions that have not yet been tried**.\n" # 수정
-        "Avoid repeating the same actions unless strongly justified.\n\n" # 수정
+        "When deciding, consider any info gaps or low confidence in the 7 criteria.\n"
+        "Also, review the action history and **choose actions that have not yet been tried**.\n" # 수정
+        "Avoid repeating the same actions. Especially, if 'AskUser' action was perfrmed before, do not chose 'AskUser' action.\n\n" # 수정
         "Return your decision in JSON with EXACTLY these three keys:\n"
         "  \"criterion\"  -> one of the 10 criteria, or \"None\" if no focus\n"
         "  \"action\"     -> one of [AskUser, SearchDB_startup, SearchDB_report, SearchInternet, RefineOutput, AnalyzeAndVisualize, NoActionNeeded]\n"
+        # "  \"action\"     -> one of [SearchDB_startup, SearchDB_report, SearchInternet, AnalyzeAndVisualize, NoActionNeeded]\n"
         "  \"rationale\"  -> a short sentence explaining why you chose this action.\n\n"
         "No extra keys, no disclaimers, no additional text. ONLY JSON."
     )
@@ -562,6 +563,8 @@ def ask_llm_for_next_action(report: dict, collected_texts: list, action_history:
         for i, entry in enumerate(action_history)
     ])
 
+    print("===========", action_history_text)
+
     user_prompt = (
         f"Current report state:\n{report_summary}\n\n"
         f"Action history so far:\n{action_history_text}\n\n"
@@ -571,6 +574,7 @@ def ask_llm_for_next_action(report: dict, collected_texts: list, action_history:
         "Important: Output EXACTLY and ONLY JSON in the following format:\n\n"
         "{\n"
         "  \"criterion\": \"<one_of_the_10_criteria_or_None>\",\n"
+        # "  \"action\": \"<SearchDB_startup_or_SearchDB_report_or_SearchInternet_or_AnalyzeAndVisualize_or_NoActionNeeded>\",\n"
         "  \"action\": \"<AskUser_or_SearchDB_startup_or_SearchDB_report_or_SearchInternet_or_RefineOutput_or_AnalyzeAndVisualize_or_NoActionNeeded>\",\n"
         "  \"rationale\": \"<short_reason>\"\n"
         "}\n"
@@ -589,6 +593,7 @@ def ask_llm_for_next_action(report: dict, collected_texts: list, action_history:
             # JSON 키 검사
             if ("criterion" in action_data) and ("action" in action_data) and ("rationale" in action_data):
                 valid_actions = ["AskUser", "SearchDB_startup", "SearchDB_report", "SearchInternet", "RefineOutput", "AnalyzeAndVisualize", "NoActionNeeded"]
+                # valid_actions = ["SearchDB_startup", "SearchDB_report", "SearchInternet", "RefineOutput", "AnalyzeAndVisualize", "NoActionNeeded"]
                 if action_data["action"] in valid_actions:
                     # # TODO 하나씩 시도
                     # action_data["action"]="AnalyzeAndVisualize"
@@ -783,12 +788,19 @@ def generate_business_report(report: dict, collected_texts: list) -> str:
             references_md += f"- Analysis Text #{i}: {ao}...\n"
 
     system_prompt_4 = (
-        "You are an AI assistant. You have a preliminary references list from user, DB, internet, etc.\n"
+        "You are an AI assistant. You have a preliminary references list from user, DB, and internet.\n"
         "You also have the final business report context.\n"
-        "Your task: read all references, decide which are most relevant or supportive for the final report, and return them in bullet format.\n"
-        "If certain references are not directly relevant or redundant, you may omit them.\n\n"
-        "Output only the references you consider relevant for the final report.\n"
-        "For each item, provide a concise explanation (1~2 lines) of why it is relevant.\n"
+        "Your task: review all references, and select only those that are directly relevant and supportive of the report.\n"
+        "Omit any redundant or off-topic references.\n\n"
+        "Output rules:\n"
+        "- If the reference includes a URL, use this format:\n"
+        "  📍 [Title](URL)\n"
+        "  (1–2 line explanation)\n\n"
+        "- If the reference does not have a URL, use this format:\n"
+        "  📋 **Title (e.g. from user input or DB)**\n"
+        "  (1–2 line explanation)\n\n"
+        "Leave a blank line between references for readability.\n"
+        "Only output the cleaned list of selected references."
     )
 
     user_prompt_4 = (

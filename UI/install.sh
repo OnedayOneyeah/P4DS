@@ -26,3 +26,4 @@ pip install codeinterpreterapi==0.1.20
 
 # 추가 (정문)
 pip install pandas sentence_transformers openpyxl streamlit python-dotenv
+pip install markdown xhtml2pdf pillow

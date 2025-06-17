@@ -18,6 +18,22 @@ from framework import (
     ask_llm_for_next_action,
     generate_business_report # 통합 버전
 )
+
+from sample import startup_inputs
+sample_type = "H_L"  # Default sample type
+name_value = startup_inputs[sample_type]['Company']
+year_value = startup_inputs[sample_type]['Year']
+location_value = startup_inputs[sample_type]['Location']
+vision_value = startup_inputs[sample_type]['Vision']
+problem_value = startup_inputs[sample_type]['ProblemProductFit']
+advantage_value = startup_inputs[sample_type]['CompetitiveAdvantage']
+team_value = startup_inputs[sample_type]['Team']
+strategy_value = startup_inputs[sample_type]['GoToMarket']
+customers_value = startup_inputs[sample_type]['CustomerUnderstanding']
+financial_value = startup_inputs[sample_type]['FinancialReadiness']
+scalability_value = startup_inputs[sample_type]['ScalabilityPotential']
+traction_value = startup_inputs[sample_type]['TractionKPIs']
+fundraising_value = startup_inputs[sample_type]['FundraisingPreparedness']
  
 # --- Streamlit App Basic Settings ---
 st.set_page_config(layout="wide", page_title="AI Startup Diagnosis")
@@ -29,7 +45,7 @@ default_values = {
     'current_stage': 'initial_form', 'startup_info': {},
     'report_card': json.loads(json.dumps(report_card)),
     'collected_contexts': [], 'action_history': [], 'iteration_count': 0,
-    'max_iterations': 0, # TODO 수정
+    'max_iterations': 10, # TODO 수정
     # --- AskUser related state ---
     'ask_user_pending': False,
     'pending_questions_list': [],     # List of questions
@@ -150,21 +166,21 @@ if st.session_state.current_stage == 'initial_form':
     st.header("1. Enter Startup Information")
     with st.form("startup_form_initial_v2_en"):
         st.subheader("Basic Information")
-        name = st.text_input("Startup Name*", placeholder="e.g., VitaLink AI", key="st_name_init_v2_en")
-        year = st.number_input("Year Founded*", min_value=1980, max_value=time.localtime().tm_year, step=1, placeholder=2020, key="st_year_init_v2_en")
-        location = st.text_input("Headquarters Location*", placeholder="e.g., Jakarta, Indonesia", key="st_location_init_v2_en")
-        vision = st.text_area("Vision*", placeholder="e.g., Rebuilding Southeast Asia’s patient experience through smart coordination.", height=80, key="st_vision_init_v2_en")
+        name = st.text_input("Startup Name*", value=name_value, key="st_name_init_v2_en")
+        year = st.number_input("Year Founded*", min_value=1980, max_value=time.localtime().tm_year, step=1, value=int(year_value), key="st_year_init_v2_en")
+        location = st.text_input("Headquarters Location*", value=location_value, key="st_location_init_v2_en")
+        vision = st.text_area("Vision*", value=vision_value, height=80, key="st_vision_init_v2_en")
 
         st.subheader("Startup Details")
-        problem = st.text_area("Problem & Product-Market Fit*", placeholder="e.g., In Southeast Asia, patient bottlenecks at the clinic front desk cause inefficiencies and poor experiences. VitaLink AI predicts clinic queue patterns and routes patients via real-time updates. In live deployment across 60 clinics, average waiting time dropped 36%.", height=120, key="st_problem_init_v2_en")
-        advantage = st.text_area("Competitive Advantage*", placeholder="e.g., Proprietary wait-time AI, regional EMR partnerships, and adaptive multilingual interface.", height=80, key="st_advantage_init_v2_en")
-        team = st.text_area("Team Competency*",placeholder="e.g., Founding team includes AI engineer from Grab, PM from Halodoc, and clinician advisor from Siloam.", height=100, key="st_team_init_v2_en")
-        strategy = st.text_area("Go-to-Market Strategy*", placeholder="e.g., First wave via EMR resellers and HMO networks. Cross-sell through diagnostic labs.", height=80, key="st_strategy_init_v2_en")
-        customers = st.text_area("Customer Understanding*", placeholder="e.g., 50+ patient interviews shaped routing model.", height=80, key="st_customers_init_v2_en")
-        financial = st.text_area("Financial Readiness*", placeholder="e.g., Burn $18K/mo, MRR $14K. Seed completed.", height=80, key="st_financial_init_v2_en")
-        scalability = st.text_area("Scalability Potential*", placeholder="e.g., Expansion to Philippines, Malaysia, Vietnam in 2025.", height=80, key="st_scalability_init_v2_en")
-        traction = st.text_area("Traction & KPIs*", placeholder="e.g., - 60 clinics live\n- 40,000 MAUs\n- 18% reduction in no-show\n- 2 B2B integrations", height=100, key="st_traction_init_v2_en")
-        fundraising = st.text_area("Fundraising Preparedness*", placeholder="e.g., Series A targeting $2M. Full data room ready.", height=80, key="st_fundraising_init_v2_en")
+        problem = st.text_area("Problem & Product-Market Fit*", value=problem_value, height=120, key="st_problem_init_v2_en")
+        advantage = st.text_area("Competitive Advantage*", value=advantage_value, height=80, key="st_advantage_init_v2_en")
+        team = st.text_area("Team Competency*",value=team_value, height=100, key="st_team_init_v2_en")
+        strategy = st.text_area("Go-to-Market Strategy*", value=strategy_value, height=80, key="st_strategy_init_v2_en")
+        customers = st.text_area("Customer Understanding*", value=customers_value, height=80, key="st_customers_init_v2_en")
+        financial = st.text_area("Financial Readiness*", value=financial_value, height=80, key="st_financial_init_v2_en")
+        scalability = st.text_area("Scalability Potential*", value=scalability_value, height=80, key="st_scalability_init_v2_en")
+        traction = st.text_area("Traction & KPIs*", value=traction_value, height=100, key="st_traction_init_v2_en")
+        fundraising = st.text_area("Fundraising Preparedness*", value=fundraising_value, height=80, key="st_fundraising_init_v2_en")
 
         submitted = st.form_submit_button("🤖 Start AI Diagnosis")
 

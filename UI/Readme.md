@@ -13,6 +13,12 @@ bash install.sh
 
 ## 애플리케이션 실행
 ```bash
+cd UI
 conda activate p4ds
-streamlit run app.py --server.fileWatcherType none
+streamlit run app.py --server.fileWatcherType none # 데모용
+streamlit run sample_app.py --server.fileWatcherType none # Ours 실험용
 ```
+
+각 iter에서 low 버전의 rich answer 버전 데모 찍기
+개인 발표 영상 찍기
+팈 발표 영상 찍기
